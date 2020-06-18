@@ -1,5 +1,0 @@
-<!ENTITY DL_mngt.name "DL FileLink Provider for Thunderbird">
-<!ENTITY DL_mngt.maxSize "Maximum file size:">
-<!ENTITY DL_mngt.total "Expire in total # of days:">
-<!ENTITY DL_mngt.lastdl "Expire in # of days after last download:">
-<!ENTITY DL_mngt.maxdl "Expire after # of downloads:">

@@ -1,0 +1,23 @@
+{
+  "extensionDescription": {
+    "message": "Convert large attachments to links automatically, directly within the Composer window, using your own “DL” server/service instead of relying on 3rd-party providers"
+  },
+  "extensionName": {
+    "message": "DL FileLink Provider for Thunderbird"
+  },
+  "serviceName": {
+    "message": "DL"
+  },
+  "insertUploadGrant": {
+    "message": "Insert Upload Grant"
+  },
+  "serviceURL": {
+    "message": "Service URL"
+  },
+  "username": {
+    "message": "Username"
+  },
+  "password": {
+    "message": "Password"
+  }
+}

@@ -1,9 +1,0 @@
-#include "nsIMsgCloudFileProvider.idl"
-
-[scriptable, uuid(044bc680-05d3-11e4-bc1f-83368bc98e1f)]
-interface nsIDL : nsIMsgCloudFileProvider
-{
-  ACString newGrant(in nsIRequestObserver aCallback, in ACString aEmail);
-  void deleteGrant(in ACString aId, in nsIRequestObserver aCallback);
-  ACString urlForGrant(in ACString aId);
-};

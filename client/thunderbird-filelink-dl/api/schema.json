@@ -1,0 +1,26 @@
+[
+  {
+    "namespace": "dl",
+    "functions": [
+      {
+        "name": "composeInsertHTML",
+        "type": "function",
+        "async": true,
+        "description": "Insert HTML into a compose window.",
+        "parameters": [
+          { "name": "windowId", "type": "integer", "minimum": 0 },
+          { "name": "html", "type": "string" }
+        ]
+      },
+      {
+        "name": "composeCurrentIdentity",
+        "type": "function",
+        "async": true,
+        "description": "Get currently selected compose window identity",
+        "parameters": [
+          { "name": "windowId", "type": "integer", "minimum": 0 }
+        ]
+      }
+    ]
+  }
+]

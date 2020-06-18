@@ -1,5 +1,0 @@
-<!ENTITY DL_mngt.name "A „DL” fájlhivatkozás szolgáltató a Thunderbird számára (DL FileLink Provider for Thunderbird)">
-<!ENTITY DL_mngt.maxSize "Maximális fájlméret:">
-<!ENTITY DL_mngt.total "Lejárat a teljes napok számában:">
-<!ENTITY DL_mngt.lastdl "Lejárat az utolsó letöltés utáni napok számával:">
-<!ENTITY DL_mngt.maxdl "Lejárat a letöltések száma után:">
