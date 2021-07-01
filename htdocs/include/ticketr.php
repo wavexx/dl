@@ -18,8 +18,8 @@ if($id === false || !isTicketId($id))
 }
 
 // try to fetch the id
-$sql = "SELECT * FROM ticket WHERE id = " . $db->quote($id);
-$DATA = $db->query($sql)->fetch();
+$DATA = DBConnection::getInstance()->getTicketById($id);
+
 if($DATA === false || isTicketExpired($DATA))
 {
   $category = ($DATA === false? 'unknown': 'expired');
@@ -54,10 +54,7 @@ $complete = ($size == $DATA["size"]);
 $last = ($range[2] == $DATA["size"] - 1);
 
 // update the record for the next query
-$now = time();
-$sql = "UPDATE ticket SET last_stamp = $now"
-  . " WHERE id = " . $db->quote($id);
-$db->exec($sql);
+DBConnection::getInstance()->updateTicketUsage($id,time(),0);
 
 // disable mod_deflate
 if(function_exists('apache_setenv'))
@@ -94,7 +91,6 @@ fclose($fd);
 if($last && !connection_aborted())
 {
   ++$DATA["downloads"];
-  reconnectDB();
 
   // set default locale for notifications
   switchLocale($defLocale);
@@ -108,10 +104,7 @@ if($last && !connection_aborted())
   else
   {
     // update download count
-    $now = time();
-    $sql = "UPDATE ticket SET last_stamp = $now"
-      . ", downloads = downloads + 1 WHERE id = " . $db->quote($id);
-    $db->exec($sql);
+    DBConnection::getInstance()->updateTicketUsage($id,time(),1);
   }
 
   // kill the session ASAP

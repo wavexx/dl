@@ -13,22 +13,19 @@ function restart_session()
 
 function ticketPurge($DATA, $auto = true)
 {
-  global $db;
-
-  if($db->exec("DELETE FROM ticket WHERE id = ". $db->quote($DATA["id"])) == 1)
-  {
-    unlink($DATA["path"]);
-    onTicketPurge($DATA, $auto);
+   error_log(print_r($DATA,true));
+   if (DBConnection::getInstance()->purgeTicketById($DATA['id'])) {
+      unlink($DATA["path"]);
+      Hooks::getInstance()->callHook('onTicketPurge',['ticket' => $DATA,'auto' => $auto]);
   }
 }
 
 
 function grantPurge($DATA, $auto = true)
 {
-  global $db;
-
-  if($db->exec("DELETE FROM \"grant\" WHERE id = ". $db->quote($DATA["id"])) == 1)
-    onGrantPurge($DATA, $auto);
+  if (DBConnection::getInstance()->purgeGrantById($DATA['id'])) {
+      Hooks::getInstance()->callHook('onGrantPurge',['grant' => $DATA,'auto' => $auto]);
+  }
 }
 
 
@@ -45,24 +42,15 @@ function init()
 
 function runGc()
 {
-  global $db, $gcLimit;
-
-  $now = time();
-
-  $sql = "SELECT * FROM ticket WHERE (expire + time) < $now";
-  $sql .= " OR (last_stamp + last_time) < $now";
-  $sql .= " OR expire_dln <= downloads";
-  if($gcLimit) $sql .= " LIMIT $gcLimit";
-  foreach($db->query($sql)->fetchAll() as $DATA)
+  global $gcLimit;
+  foreach(DBConnection::getInstance()->getTicketsToPurge(time(),$gcLimit) as $DATA) {
+    print_r($DATA);
     ticketPurge($DATA);
-
-  // expire grants
-  $sql = "SELECT * FROM \"grant\" WHERE (grant_expire + time) < $now";
-  $sql .= " OR (last_stamp + grant_last_time) < $now";
-  $sql .= " OR grant_expire_uln <= uploads";
-  if($gcLimit) $sql .= " LIMIT $gcLimit";
-  foreach($db->query($sql)->fetchAll() as $DATA)
+  }
+  
+  foreach(DBConnection::getInstance()->getGrantsToPurge(time(),$gcLimit) as $DATA) {
     grantPurge($DATA);
+  }
 }
 
 
@@ -89,17 +77,13 @@ function genTicketId()
 
 function genGrantId()
 {
-  global $db, $maxUUTries;
+  global $maxUUTries;
 
-  $q = $db->prepare('SELECT id FROM "grant" WHERE id = :id');
   $tries = $maxUUTries;
-  do
-  {
+  do {
     $id = randomToken();
-    $q->closeCursor();
-    $q->execute(array(':id' => $id));
   }
-  while($q->fetch() !== FALSE && --$tries);
+  while((DBConnection::getInstance()->getGrantById($id)!==false) && --$tries);
   if(!$tries)
   {
     logError("cannot generate unique grant ID");
@@ -112,70 +96,77 @@ function genGrantId()
 
 function userAdd($user, $pass, $admin, $email = false)
 {
-  global $db, $maxUserLen, $maxPassLen;
+  global $maxUserLen, $maxPassLen;
 
   // validate user/password sizes
   if(strlen($user) > $maxUserLen || strlen($pass) > $maxPassLen)
     return false;
-
-  // prepare the SQL
-  $sql = 'INSERT INTO "user" (name, pass_ph, role_id, email) VALUES (';
-  $sql .= $db->quote($user);
-  $sql .= ", " . (empty($pass)? 'NULL': $db->quote(hashPassword($pass)));
-  $sql .= ", (SELECT id FROM role WHERE name = '"
-    . ($admin? 'admin': 'user') . "')";
-  $sql .= ", " . (empty($email)? 'NULL': $db->quote($email));
-  $sql .= ")";
-
-  $ret = ($db->exec($sql) == 1);
-  logEvent("adding user $user: " . ($ret? "success": "fail"),
-      ($ret? LOG_INFO: LOG_ERR));
-  return $ret;
+  
+  if ($admin) {
+      $role = DBConnection::getInstance()->getRoleByName('admin');
+  }
+  else {
+      $role = DBConnection::getInstance()->getRoleByName('user');
+  }
+  if ($role===FALSE) {
+      throw new \Exception("Could not find role");
+  }
+  
+  if (empty($pass)) {
+      $pass = null;
+  }
+  else {
+      $pass = hashPassword($pass);
+  }
+  
+  $result = DBConnection::getInstance()->createUser($user,
+                                                      (empty($pass)? NULL : hashPassword($pass)),
+                                                      $role['id'],
+                                                      (empty($email)? NULL : $email));
+  logEvent("adding user $user: " . ($result? "success": "fail"),
+            ($result? LOG_INFO: LOG_ERR));
+  return $result;
 }
 
 
 function userDel($user)
 {
-  global $db;
-  $sql = 'DELETE FROM "user" WHERE name = ' . $db->quote($user);
-  $ret = ($db->exec($sql) == 1);
-  logEvent("deleting user $user: " . ($ret? "success": "fail"),
-      ($ret? LOG_INFO: LOG_ERR));
+  $result = DBConnection::getInstance()->deleteUser($user);
+  logEvent("deleting user $user: " . ($result? "success": "fail"),
+      ($result? LOG_INFO: LOG_ERR));
   return $ret;
 }
 
 
 function userUpd($user, $pass = null, $admin = null, $email = null)
 {
-  global $db, $maxUserLen, $maxPassLen;
+  global $maxUserLen, $maxPassLen;
 
   // validate user/password sizes
   if(strlen($user) > $maxUserLen || strlen($pass) > $maxPassLen)
     return false;
 
   // prepare the SQL
-  $fields = array();
+  $values = array();
   if(!is_null($pass))
   {
-    $fields[] = "pass_md5 = NULL";
-    $fields[] = "pass_ph = " . (empty($pass)? 'NULL': $db->quote(hashPassword($pass)));
+      $values['pass_ph'] = hashPassword($pass);
   }
   if(!is_null($admin))
   {
-    $fields[] = "role_id = (SELECT id FROM role WHERE name = '"
-      . ($admin? 'admin': 'user') . "')";
+      $role = DBConnection::getInstance()->getRoleByName(($admin? 'admin': 'user'));
+      $values['role_id'] = $role['id'];
   }
   if(!is_null($email))
   {
-    $fields[] = "email = " . (empty($email)? 'NULL': $db->quote($email));
+      $values['email'] = (empty($email)? NULL: $email);
   }
-  if(!count($fields))
-    return false;
-
-  $sql = 'UPDATE "user" SET ' . implode(", ", $fields)
-    . " WHERE name = " . $db->quote($user);
-  $ret = ($db->exec($sql) == 1);
-
+  
+  if (count(array_keys($values))==0) {
+      return false;
+  }
+  $ret = DBConnection::getInstance()->updateUser($user, $values);
+  
   $msg = array();
   if(!is_null($pass)) $msg[] = "password";
   if(!is_null($admin)) $msg[] = "role";
@@ -188,14 +179,7 @@ function userUpd($user, $pass = null, $admin = null, $email = null)
 
 function userAdm($user)
 {
-  global $db;
-
-  $sql = 'SELECT u.name, admin FROM "user" u'
-    . " LEFT JOIN role r ON r.id = u.role_id"
-    . " WHERE u.name = " . $db->quote($user);
-  $DATA = $db->query($sql)->fetch();
-
-  return ($DATA? $DATA['admin']: null);
+  return DBConnection::getInstance()->userIsAdmin($user);
 }
 
 
@@ -207,13 +191,12 @@ function userCheck($user, $pass)
 
 function hasPassHash($DATA)
 {
-  return (isset($DATA['pass_ph']) || isset($DATA['pass_md5']));
+  return isset($DATA['pass_ph']);
 }
-
 
 function checkPassHash($table, $DATA, $pass)
 {
-  global $db, $maxPassLen;
+  global $maxPassLen;
 
   // validate password size
   if(strlen($pass) > $maxPassLen)
@@ -222,64 +205,33 @@ function checkPassHash($table, $DATA, $pass)
   if(!$DATA || empty($pass) || isset($DATA['pass_ph']))
   {
     $hash = ($DATA !== false? $DATA['pass_ph']: '*');
-    $okpass = password_verify($pass, $hash);
+    return password_verify($pass, $hash);
   }
-  else
-  {
-    // legacy upgrade
-    $okpass = (md5($pass) === $DATA['pass_md5']);
-    if($okpass)
-    {
-      $id = $DATA['id'];
-      $DATA['pass_md5'] = NULL;
-      $DATA['pass_ph'] = hashPassword($pass);
-      $sql = "UPDATE $table"
-	. " SET pass_ph = " . $db->quote($DATA['pass_ph'])
-	. ", pass_md5 = NULL WHERE id = " . $db->quote($id);
-      $ret = ($db->exec($sql) == 1);
-      logEvent("upgrading password hash of $table/$id: "
-	  . ($ret? "success": "fail"), ($ret? LOG_INFO: LOG_ERR));
-    }
-  }
-
-  return $okpass;
+  return false;
 }
 
 
 function userLogin($user, $pass, $rmt, $email = false)
 {
-  global $db, $maxUserLen, $maxPassLen;
+  global $maxUserLen, $maxPassLen;
 
   // validate user/password sizes
   if(strlen($user) > $maxUserLen || strlen($pass) > $maxPassLen)
     return false;
 
   // fetch the user
-  $sql = 'SELECT u.id, u.name, pass_md5, pass_ph, admin, email FROM "user" u'
-    . " LEFT JOIN role r ON r.id = u.role_id"
-    . " WHERE u.name = " . $db->quote($user);
-  $DATA = $db->query($sql)->fetch();
-
+  $DATA = DBConnection::getInstance()->getUserByName($user);
   // remote auth doesn't check pass, but still needs an id stub
   if($rmt)
   {
     if(!$DATA)
     {
-      // create a stub user and get the id
-      $sql = 'INSERT INTO "user" (name, role_id, email) VALUES (';
-      $sql .= $db->quote($user);
-      $sql .= ", (SELECT id FROM role WHERE name = 'user')";
-      $sql .= ", " . (empty($email)? 'NULL': $db->quote($email));
-      $sql .= ")";
-      if($db->exec($sql) != 1) return false;
-
-      // fetch defaults
-      $sql = 'SELECT u.id, u.name, admin, email FROM "user" u';
-      $sql .= " LEFT JOIN role r ON r.id = u.role_id";
-      $sql .= " WHERE u.name = " . $db->quote($user);
-      $DATA = $db->query($sql)->fetch();
+      $role = DBConnection::getInstance()->getRoleByName('user');
+      if (!DBConnection::getInstance()->createUser($user,null,$role['id'],$email)) {
+          return false;
+      }
+      $DATA = DBConnection::getInstance()->getUserByName($user);
     }
-
     return $DATA;
   }
 

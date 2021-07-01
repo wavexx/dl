@@ -57,9 +57,7 @@ if(!empty($DATA['from_grant']))
 // owner
 if($DATA["user_id"] != $auth["id"])
 {
-  $sql = 'SELECT name FROM "user"'
-    . " WHERE id = " . $db->quote($DATA["user_id"]);
-  $user = $db->query($sql)->fetch();
+  $user = DBConnection::getInstance()->getUserById($DATA["user_id"]);
   $details[T_('Created by')] = htmlEntUTF8($user["name"]);
 }
 

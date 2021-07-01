@@ -16,9 +16,8 @@ if(isset($_REQUEST["purge"]) && !empty($_REQUEST["sel"]))
   foreach($sel as $id)
   {
     if(!isGrantId($id)) continue;
-    $sql = "SELECT * FROM \"grant\" WHERE id = " . $db->quote($id);
-    $DATA = $db->query($sql)->fetch();
-    if($DATA === false) continue;
+    $DATA = DBConnection::getInstance()->getGrantById($id);
+    if ($DATA === false) continue;
 
     // check for permissions
     if($DATA["user_id"] != $auth["id"])
@@ -32,11 +31,6 @@ if(isset($_REQUEST["purge"]) && !empty($_REQUEST["sel"]))
   if(count($list))
     infoMessage(T_("Purged"), $list);
 }
-
-// list active grants
-$sql = 'SELECT * FROM "grant" g'
-    . ' WHERE user_id = ' . $auth["id"]
-    . ' ORDER BY time DESC';
 
 ?>
 <form action="<?php echo $ref; ?>" method="post">
@@ -54,8 +48,7 @@ $sql = 'SELECT * FROM "grant" g'
     </thead>
     <tbody>
 <?php
-
-foreach($db->query($sql) as $DATA)
+foreach(DBConnection::getInstance()->getActiveGrantsByUser($auth["id"]) as $DATA)
 {
   if(isGrantExpired($DATA)) continue;
 

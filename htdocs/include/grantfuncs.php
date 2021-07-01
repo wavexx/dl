@@ -7,9 +7,10 @@ require_once("ticketfuncs.php");
 function isGrantExpired($DATA, $now = NULL)
 {
   if(!isset($now)) $now = time();
-  return (($DATA["grant_expire"] && ($DATA["grant_expire"] + $DATA["time"]) < $now)
-       || ($DATA["last_stamp"] && $DATA["grant_last_time"] && ($DATA["last_stamp"] + $DATA["grant_last_time"]) < $now)
-       || ($DATA["grant_expire_uln"] && $DATA["grant_expire_uln"] <= $DATA["uploads"]));
+  $expire1 = (($DATA["grant_expire"]<>0) && ($DATA["grant_expire"] + $DATA["time"]) < $now);
+  $expire2 = (($DATA["last_stamp"]<>0) && $DATA["grant_last_time"] && ($DATA["last_stamp"] + $DATA["grant_last_time"]) < $now);
+  $expire3 = (($DATA["grant_expire_uln"]<>0) && $DATA["grant_expire_uln"] <= $DATA["uploads"]);
+  return $expire1 || $expire2 || $expire3;
 }
 
 
@@ -96,7 +97,7 @@ function grantExpirationParams($params)
 
 function genGrant($params)
 {
-  global $auth, $locale, $db;
+  global $auth, $locale;
 
   // generate new unique id
   $id = genGrantId();
@@ -108,43 +109,33 @@ function genGrant($params)
   // expiration values
   list($grant_total, $grant_lastul, $grant_maxul) = grantExpirationParams($params);
   list($ticket_total, $ticket_lastdl, $ticket_maxdl) = ticketExpirationParams($params);
-
-  // prepare data
-  $sql = "INSERT INTO \"grant\" (id, user_id, grant_expire, grant_last_time"
-       . ", grant_expire_uln, cmt, pass_ph, pass_send, time, expire, last_time"
-       . ", expire_dln, notify_email, sent_email, locale) VALUES (";
-  $sql .= $db->quote($id);
-  $sql .= ", " . $auth['id'];
-  $sql .= ", " . $grant_total;
-  $sql .= ", " . $grant_lastul;
-  $sql .= ", " . $grant_maxul;
-  $sql .= ", " . (empty($params["comment"])? 'NULL': $db->quote($params["comment"]));
-  $sql .= ", " . (empty($params["pass"])? 'NULL': $db->quote(hashPassword($params["pass"])));
-  $sql .= ", " . (!isset($params["pass_send"])? '1': (int)to_boolean($params["pass_send"]));
-  $sql .= ", " . time();
-  $sql .= ", " . $ticket_total;
-  $sql .= ", " . $ticket_lastdl;
-  $sql .= ", " . $ticket_maxdl;
-  $sql .= ", " . (empty($params["notify"])? 'NULL': $db->quote(fixEMailAddrs($params["notify"])));
-  $sql .= ", " . (empty($params["send_to"])? 'NULL': $db->quote(fixEMailAddrs($params["send_to"])));
-  $sql .= ", " . $db->quote($locale);
-  $sql .= ")";
-
-  try { $db->exec($sql); }
-  catch(PDOException $e)
-  {
-    logDBError($db, "cannot commit new grant to database");
+  
+  $ret = DBConnection::getInstance()->createGrant($id,
+                                           $auth['id'],
+                                           $grant_total,
+                                           $grant_lastul,
+                                           $grant_maxul,
+                                           (empty($params["comment"])? NULL:$params["comment"]),
+                                           (empty($params["pass"])? NULL: hashPassword($params["pass"])),
+                                           (!isset($params["pass_send"])? true: to_boolean($params["pass_send"])),
+                                           time(),
+                                           $ticket_total,
+                                           $ticket_lastdl, /* 10 */
+                                           $ticket_maxdl,
+                                           (empty($params["notify"])? NULL: fixEMailAddrs($params["notify"])),
+                                           (empty($params["send_to"])? NULL: fixEMailAddrs($params["send_to"])),
+                                           $locale);
+   if (!$ret) {       
+    logDBError(null, "cannot commit new grant to database");
     return false;
   }
-
-  // fetch defaults
-  $sql = "SELECT * FROM \"grant\" WHERE id = " . $db->quote($id);
-  $DATA = $db->query($sql)->fetch();
+  
+  $DATA = DBConnection::getInstance()->getGrantById($id);
   $DATA['pass'] = (empty($params["pass"])? NULL: $params["pass"]);
 
   // trigger creation hooks
-  onGrantCreate($DATA);
-
+  Hooks::getInstance()->callHook('onGrantCreate',['grant' => $DATA]);
+  
   return $DATA;
 }
 

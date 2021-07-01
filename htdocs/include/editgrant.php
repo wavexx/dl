@@ -5,44 +5,40 @@ require_once("pages.php");
 
 function handleUpdate($DATA, $params)
 {
-  global $db;
-
   // handle parameters
   $values = array();
-  $values['notify_email'] = $db->quote(fixEMailAddrs($params["notify"]));
+  $values['notify_email'] = fixEMailAddrs($params["notify"]);
 
   if(isset($params['comment']))
   {
     $comment = trim($params['comment']);
-    $values['cmt'] = (empty($comment)? 'NULL': $db->quote($comment));
+    $values['cmt'] = (empty($comment)? NULL: $comment);
   }
 
   if(isset($params['pass_clear']) && $params['pass_clear'])
   {
-    $values['pass_md5'] = 'NULL';
-    $values['pass_ph'] = 'NULL';
+    $values['pass_ph'] = NULL;
   }
   elseif(!empty($params['pass']))
   {
-    $values['pass_md5'] = 'NULL';
-    $values['pass_ph'] = $db->quote(hashPassword($params['pass']));
+    $values['pass_ph'] = hashPassword($params['pass']);
   }
 
   if(isset($params['pass_send']) && $params['pass_send'])
-    $values['pass_send'] = 1;
+    $values['pass_send'] = true;
   else
-    $values['pass_send'] = 0;
+    $values['pass_send'] = false;
 
   if(isset($params['grant_permanent']) && $params['grant_permanent'])
   {
-    $values['grant_last_time'] = 'NULL';
-    $values['grant_expire'] = 'NULL';
-    $values['grant_expire_uln'] = 'NULL';
+    $values['grant_last_time'] = NULL;
+    $values['grant_expire'] = NULL;
+    $values['grant_expire_uln'] = NULL;
   }
   else
   {
     if(empty($params['grant_totaldays']))
-      $values['grant_expire'] = 'NULL';
+      $values['grant_expire'] = NULL;
     elseif(isset($params['grant_totaldays']))
       $values['grant_expire'] = (time() - $DATA["time"]) + $params["grant_totaldays"] * 3600 * 24;
     if(isset($params['grant_lastuldays']))
@@ -53,9 +49,9 @@ function handleUpdate($DATA, $params)
 
   if(isset($params['ticket_permanent']) && $params['ticket_permanent'])
   {
-    $values['last_time'] = 'NULL';
-    $values['expire'] = 'NULL';
-    $values['expire_dln'] = 'NULL';
+    $values['last_time'] = NULL;
+    $values['expire'] = NULL;
+    $values['expire_dln'] = NULL;
   }
   else
   {
@@ -70,21 +66,15 @@ function handleUpdate($DATA, $params)
   }
 
   // prepare the query
-  $tmp = array();
-  foreach($values as $k => $v) $tmp[] = "$k = $v";
-  $sql = "UPDATE \"grant\" SET " . join(", ", $tmp)
-    . " WHERE id = " . $db->quote($DATA["id"]);
-  if($db->exec($sql) != 1)
-    return false;
-
-  // fetch defaults
-  $sql = "SELECT * FROM \"grant\" WHERE id = " . $db->quote($DATA["id"]);
-  $DATA = $db->query($sql)->fetch();
+  if (!DBConnection::getInstance()->updateGrant($id,$values)) {
+      return false;
+  }
+  
+  $DATA = DBConnection::getInstance()->getGrantById($id);
   $DATA['pass'] = (empty($params["pass"])? NULL: $_POST["pass"]);
 
   // trigger update hooks
-  onGrantUpdate($DATA);
-
+  Hooks::getInstance()->callHook('onGrantUpdate',['grant' => $DATA]);
   return $DATA;
 }
 
@@ -96,8 +86,7 @@ if(empty($id) || !isGrantId($id))
   $id = false;
 else
 {
-  $sql = "SELECT * FROM \"grant\" WHERE id = " . $db->quote($id);
-  $DATA = $db->query($sql)->fetch();
+  $DATA = DBConnection::getInstance()->getGrantById($id);
   if($DATA === false || isGrantExpired($DATA)
   || (!$auth["admin"] && $DATA["user_id"] != $auth["id"]))
     $DATA = false;

@@ -29,9 +29,7 @@ EOD
 if($argv[1] == 'list')
 {
   echo "#user\tadm\n";
-
-  $sql = 'SELECT u.name, admin FROM "user" u LEFT JOIN role r ON r.id = u.role_id';
-  foreach($db->query($sql) as $DATA)
+  foreach(DBConnection::getInstance()->getAllUsers() as $DATA)
     echo $DATA["name"] . "\t" . ($DATA["admin"]? "true": "false") . "\n";
 
   exit(0);

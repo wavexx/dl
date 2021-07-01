@@ -77,26 +77,6 @@ function htmlRole($name, $selected)
   return $ret;
 }
 
-// list users
-$sql = <<<EOF
-  SELECT u.name, admin, t.count as tickets, g.count as grants, t.size
-  FROM "user" u
-  LEFT JOIN role r ON r.id = u.role_id
-  LEFT JOIN (
-      SELECT u.id AS id, count(t.id) as count, sum(t.size) as size
-      FROM "user" u
-      LEFT JOIN ticket t ON t.user_id = u.id
-      GROUP BY u.id
-    ) t ON t.id = u.id
-  LEFT JOIN (
-      SELECT u.id AS id, count(g.id) as count
-      FROM "user" u
-      LEFT JOIN "grant" g ON g.user_id = u.id
-      GROUP BY u.id
-    ) g ON g.id = u.id
-  ORDER BY u.name
-EOF;
-
 ?>
 <form action="<?php echo $ref; ?>" method="post">
   <table class="sortable" id="users">
@@ -114,7 +94,7 @@ EOF;
     <tbody>
 <?php
 
-foreach($db->query($sql) as $DATA)
+foreach(DBConnection::getInstance()->getAllUsersIncludingStats() as $DATA)
 {
   // selection
   echo "<tr><td><input class=\"element checkbox\" type=\"checkbox\" name=\"sel[]\" value=\""

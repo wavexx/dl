@@ -2,6 +2,58 @@
 // dl ticket event hooks
 require_once("msg.php");
 
+final class Hooks {
+    protected static $instance = null;
+    protected $hooks;
+    
+    public static function getInstance() {
+        if (!isset(static::$instance)) {
+            static::$instance = new static;
+        }
+        return static::$instance;
+    }
+    
+    protected function __construct() {
+        $this->hooks =
+        [
+            'onTicketCreate'    => ['onTicketCreate'],
+            'onTicketUpdate'    => [],
+            'onTicketDownload'  => ['onTicketDownload'],
+            'onTicketPurge'     => ['onTicketPurge'],
+            'onGrantCreate'     => ['onGrantCreate'],
+            'onGrantUpdate'     => [],
+            'onGrantPurge'      => ['onGrantPurge'],
+            'onGrantUse'        => ['onGrantUse']
+        ];
+    }
+    
+    /**
+     * Me not like clones! Me smash clones!
+     */
+    protected function __clone() { }
+    
+    public function registerHook($hookName, $callable) {
+        if (!in_array($hookName,array_keys($this->hooks))) {
+            throw new \Exception("Hook name unkown");
+        }
+        $this->hooks[$hookName][] = $callable;
+        return $this;
+    }
+    
+    public function callHook($hookName,$arrData) {
+        if (!in_array($hookName,array_keys($this->hooks))) {
+            throw new \Exception("Hook name unkown");
+        }
+        foreach($this->hooks[$hookName] as $a) {
+            if (is_callable($a)) {
+                $a($arrData);
+            }
+            else {
+                throw new \Exception("Hook: " . $a . " is not callable");
+            }
+        }
+    }
+}
 
 function onTicketCreate($DATA)
 {
@@ -47,9 +99,12 @@ function onTicketDownload($DATA)
 }
 
 
-function onTicketPurge($DATA, $auto)
+function onTicketPurge($args)
 {
   global $fromAddr;
+  
+  $DATA = $args['ticket'];
+  $auto = $args['auto'];
 
   // log
   $reason = ($auto? "automatically": "manually");
@@ -68,9 +123,11 @@ function onTicketPurge($DATA, $auto)
 }
 
 
-function onGrantCreate($DATA)
+function onGrantCreate($args)
 {
   global $fromAddr;
+  
+  $DATA = $args['grant'];
 
   // log
   $type = (!$DATA["expire"]? "permanent": "temporary");
@@ -95,9 +152,12 @@ function onGrantUpdate($DATA)
 }
 
 
-function onGrantPurge($DATA, $auto)
+function onGrantPurge($args)
 {
   global $fromAddr;
+  
+  $DATA = $args['grant'];
+  $auto = $args['auto'];
 
   // log
   $reason = ($auto? "automatically": "manually");
@@ -115,9 +175,12 @@ function onGrantPurge($DATA, $auto)
 }
 
 
-function onGrantUse($GRANT, $TICKET)
+function onGrantUse($args)
 {
   global $fromAddr;
+  
+  $GRANT = $args['grant'];
+  $TICKET = $args['ticket'];
 
   // log
   logGrantEvent($GRANT, "genenerated ticket " . $TICKET['id']

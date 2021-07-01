@@ -5,73 +5,62 @@ require_once("pages.php");
 
 function handleUpdate($DATA, $params)
 {
-  global $db;
-
   // handle parameters
   $values = array();
 
   if(!empty($params['name']))
-    $values['name'] = $db->quote(mb_sanitize($params['name']));
+    $values['name'] = mb_sanitize($params['name']);
 
   if(isset($params['comment']))
   {
     $comment = trim($params['comment']);
-    $values['cmt'] = (empty($comment)? 'NULL': $db->quote($comment));
+    $values['cmt'] = (empty($comment)? 'NULL': $comment);
   }
 
   if(isset($params['pass_clear']) && $params['pass_clear'])
   {
-    $values['pass_md5'] = 'NULL';
-    $values['pass_ph'] = 'NULL';
+    $values['pass_ph'] = NULL;
   }
   elseif(!empty($params['pass']))
   {
-    $values['pass_md5'] = 'NULL';
-    $values['pass_ph'] = $db->quote(hashPassword($params['pass']));
+    $values['pass_ph'] = hashPassword($params['pass']);
   }
 
   if(isset($params['pass_send']) && $params['pass_send'])
-    $values['pass_send'] = 1;
+    $values['pass_send'] = true;
   else
-    $values['pass_send'] = 0;
+    $values['pass_send'] = 0false;
 
   if(isset($params['ticket_permanent']) && $params['ticket_permanent'])
   {
-    $values['last_time'] = 'NULL';
-    $values['expire'] = 'NULL';
-    $values['expire_dln'] = 'NULL';
+    $values['last_time'] = NULL;
+    $values['expire'] = NULL;
+    $values['expire_dln'] = NULL;
   }
   else
   {
     if(empty($params['ticket_totaldays']))
-      $values['expire'] = 'NULL';
+      $values['expire'] = NULL;
     elseif(isset($params['ticket_totaldays']))
       $values['expire'] = (time() - $DATA["time"]) + $params["ticket_totaldays"] * 3600 * 24;
     if(isset($params['ticket_lastdldays']))
-      $values['last_time'] = (empty($params['ticket_lastdldays'])? 'NULL': $params["ticket_lastdldays"] * 3600 * 24);
+      $values['last_time'] = (empty($params['ticket_lastdldays'])? NULL: $params["ticket_lastdldays"] * 3600 * 24);
     if(isset($params['ticket_maxdl']))
-      $values['expire_dln'] = (empty($params['ticket_maxdl'])? 'NULL': $DATA["downloads"] + (int)$params['ticket_maxdl']);
+      $values['expire_dln'] = (empty($params['ticket_maxdl'])? NULL: $DATA["downloads"] + (int)$params['ticket_maxdl']);
   }
 
   if(isset($params['notify']))
-    $values['notify_email'] = (empty($params['notify'])? 'NULL': $db->quote(fixEMailAddrs($params["notify"])));
-
-  // prepare the query
-  $tmp = array();
-  foreach($values as $k => $v) $tmp[] = "$k = $v";
-  $sql = "UPDATE ticket SET " . join(", ", $tmp)
-    . " WHERE id = " . $db->quote($DATA["id"]);
-  if($db->exec($sql) != 1)
+    $values['notify_email'] = (empty($params['notify'])? NULL: fixEMailAddrs($params["notify"]));
+  
+  if (!DBConnection::getInstance()->updateTicket($DATA["id"],$values)) {
     return false;
-
-  // fetch defaults
-  $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($DATA["id"]);
-  $DATA = $db->query($sql)->fetch();
+  }
+  
+  $DATA = DBConnection::getInstance()->getTicketById($DATA["id"]);
   $DATA['pass'] = (empty($params["pass"])? NULL: $_POST["pass"]);
 
   // trigger update hooks
-  onTicketUpdate($DATA);
-
+  Hooks::getInstance()->callHook('onTicketUpdate',['ticket' => $DATA]);
   return $DATA;
 }
 
@@ -83,8 +72,7 @@ if(empty($id) || !isTicketId($id))
   $id = false;
 else
 {
-  $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($id);
-  $DATA = $db->query($sql)->fetch();
+  $DATA = DBConnection::getInstance()->getTicketById($DATA["id"]);
   if($DATA === false || isTicketExpired($DATA)
   || (!$auth["admin"] && $DATA["user_id"] != $auth["id"]))
     $DATA = false;

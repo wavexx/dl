@@ -16,8 +16,8 @@ if(isset($_REQUEST["purge"]) && !empty($_REQUEST["sel"]))
   foreach($sel as $id)
   {
     if(!isTicketId($id)) continue;
-    $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($id);
-    $DATA = $db->query($sql)->fetch();
+    
+    $DATA = DBConnection::getInstance()->getTicketById($id);
     if($DATA === false) continue;
 
     // check for permissions
@@ -35,13 +35,6 @@ if(isset($_REQUEST["purge"]) && !empty($_REQUEST["sel"]))
 
 // list active tickets
 $totalSize = 0;
-
-$sql = 'SELECT t.*, g.cmt AS grant_cmt FROM ticket t'
-     . ' LEFT JOIN "grant" g ON g.id = t.from_grant'
-     . ' WHERE t.user_id = ' . $auth["id"]
-     . ' AND t.from_grant IS NOT NULL'
-     . ' ORDER BY t.time DESC';
-
 ?>
 <form action="<?php echo $ref; ?>" method="post">
   <table class="sortable" id="recvtickets">
@@ -61,7 +54,7 @@ $sql = 'SELECT t.*, g.cmt AS grant_cmt FROM ticket t'
     <tbody>
 <?php
 
-foreach($db->query($sql) as $DATA)
+foreach(DBConnection::getInstance()->getReceivedFilesForUser($auth['id']) as $DATA)
 {
   if(isTicketExpired($DATA)) continue;
 

@@ -24,9 +24,6 @@ if(@$ret === false)
 else
   ini_set('display_errors', 0);
 
-// initialize the db
-connectDB();
-
 // initial state
 $UPLOAD_ERRNO = UPLOAD_ERR_OK;
 

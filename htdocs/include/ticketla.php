@@ -16,8 +16,7 @@ if(isset($_REQUEST["purge"]) && !empty($_REQUEST["sel"]))
   foreach($sel as $id)
   {
     if(!isTicketId($id)) continue;
-    $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($id);
-    $DATA = $db->query($sql)->fetch();
+    $DATA = DBConnection::getInstance()->getTicketById($id);
     if($DATA === false) continue;
 
     // actually purge the ticket
@@ -31,10 +30,6 @@ if(isset($_REQUEST["purge"]) && !empty($_REQUEST["sel"]))
 
 // list active tickets
 $totalSize = 0;
-
-$sql = 'SELECT t.*, u.name AS "user", t.from_grant FROM ticket t'
-    . ' LEFT JOIN "user" u ON u.id = t.user_id'
-    . ' ORDER BY time DESC';
 
 ?>
 <form action="<?php echo $ref; ?>" method="post">
@@ -55,7 +50,7 @@ $sql = 'SELECT t.*, u.name AS "user", t.from_grant FROM ticket t'
     <tbody>
 <?php
 
-foreach($db->query($sql) as $DATA)
+foreach(DBConnection::getInstance()->getAllActiveTickets() as $DATA)
 {
   if(isTicketExpired($DATA)) continue;
 

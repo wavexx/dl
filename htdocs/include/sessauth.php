@@ -4,7 +4,7 @@ require_once("sess.php");
 
 function authenticate()
 {
-  global $db, $authRealm, $style;
+  global $authRealm, $style;
 
   $rmt = ($authRealm != false);
   $extAuth = externalAuth();

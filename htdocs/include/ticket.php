@@ -11,8 +11,7 @@ if(!isTicketId($id))
 }
 else
 {
-  $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($id);
-  $DATA = $db->query($sql)->fetch();
+  $DATA = DBConnection::getInstance()->getTicketById($id);
 }
 
 $ref = "$masterPath?t=$id";

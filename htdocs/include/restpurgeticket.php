@@ -4,15 +4,14 @@ require_once("ticketfuncs.php");
 
 function purgeticket($msg, $id = null)
 {
-  global $db, $auth;
+  global $auth;
 
   // check id validity
   if(empty($id) || !isTicketId($id))
     return array('httpBadRequest', 'bad parameters');
 
   // fetch the ticket id
-  $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($id);
-  $DATA = $db->query($sql)->fetch();
+  $DATA = DBConnection::getInstance()->getTicketById($id);
   if($DATA === false || isTicketExpired($DATA))
     return array('httpNotFound', 'not found');
 

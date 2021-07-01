@@ -11,8 +11,7 @@ if(!isGrantId($id))
 }
 else
 {
-  $sql = "SELECT * FROM \"grant\" WHERE id = " . $db->quote($id);
-  $GRANT = $db->query($sql)->fetch();
+  $GRANT = DBConnection::getInstance()->getGrantById($id)   ; 
 }
 
 $ref = "$masterPath?g=$id";
@@ -49,72 +48,59 @@ if(hasPassHash($GRANT) && !isset($_SESSION['g'][$id]))
 // upload handler
 function useGrant($upload, $GRANT, $DATA)
 {
-  global $db;
-
   // populate comment with file list when empty
   if(!empty($DATA["cmt"]))
     $DATA["cmt"] = trim($DATA["cmt"]);
   if(empty($DATA["cmt"]) && count($upload['files']) > 1)
     $DATA["cmt"] = T_("Archive contents:") . "\n  " . implode("\n  ", $upload['files']);
 
-  // convert the upload to a ticket
-  $db->beginTransaction();
-
-  $sql = "INSERT INTO ticket (id, user_id, name, path, size, cmt, pass_ph, pass_send"
-    . ", time, last_time, expire, expire_dln, locale, from_grant) VALUES (";
-  $sql .= $db->quote($upload['id']);
-  $sql .= ", " . $GRANT['user_id'];
-  $sql .= ", " . $db->quote($upload["name"]);
-  $sql .= ", " . $db->quote($upload["path"]);
-  $sql .= ", " . $upload["size"];
-  $sql .= ", " . (empty($DATA["cmt"])? 'NULL': $db->quote($DATA["cmt"]));
-  $sql .= ", " . (empty($GRANT["pass_ph"])? 'NULL': $db->quote($GRANT["pass_ph"]));
-  $sql .= ", " . (int)$GRANT["pass_send"];
-  $sql .= ", " . time();
-  $sql .= ", " . (empty($GRANT["last_time"])? 'NULL': $GRANT['last_time']);
-  $sql .= ", " . (empty($GRANT["expire"])? 'NULL': $GRANT['expire']);
-  $sql .= ", " . (empty($GRANT["expire_dln"])? 'NULL': $GRANT['expire_dln']);
-  $sql .= ", " . (empty($GRANT["locale"])? 'NULL': $db->quote($GRANT['locale']));
-  $sql .= ", " . $db->quote($GRANT['id']);
-  $sql .= ")";
-
-  try { $db->exec($sql); }
-  catch(PDOException $e)
-  {
-    logDBError($db, "cannot commit new ticket to database");
-    return false;
+  // start Transaction
+  try {
+      DBConnection::getInstance()->beginTansaction();
+      $success = DBConnection::getInstance()->generateTicket($upload['id'], 
+                                                              $GRANT['user_id'], 
+                                                              $upload["name"],
+                                                              $upload["path"],
+                                                              $upload["size"],
+                                                              (empty($DATA["cmt"])? NULL: $DATA["cmt"]),
+                                                              (empty($GRANT["pass_ph"])? NULL: $GRANT["pass_ph"]), 
+                                                              $GRANT["pass_send"],
+                                                              time(),
+                                                              (empty($GRANT["expire"])? NULL: $GRANT['expire']),
+                                                              (empty($GRANT["last_time"])? NULL: $GRANT['last_time']),
+                                                              (empty($GRANT["expire_dln"])? NULL: $GRANT['expire_dln']),
+                                                              NULL,
+                                                              NULL,
+                                                              (empty($GRANT["locale"])? NULL: $GRANT['locale']),
+                                                              $GRANT['id']);
+      if (!$success) {
+          logDBError(null, "cannot commit new ticket to database");
+          return false;
+      }
+      
+      // update grant
+      ++$GRANT["uploads"];
+      if(isGrantExpired($GRANT))
+      {
+          DBConnection::getInstance()->purgeGrantById($GRANT['id']);
+      }
+      else
+      {
+          DBConnection::getInstance()->updateGrantUsage(time(),1);
+      }
+      DBConnection::getInstance()->commit();
   }
-
-  // check for validity after upload
-  ++$GRANT["uploads"];
-  if(isGrantExpired($GRANT))
-  {
-    $sql = "DELETE FROM \"grant\" WHERE id = " . $db->quote($GRANT['id']);
-    $db->exec($sql);
+  catch (\Exception $e) {
+      DBConnection::getInstance()->rollBack();
+      return false;
   }
-  else
-  {
-    $now = time();
-    $sql = "UPDATE \"grant\" SET last_stamp = $now"
-	 . ", uploads = uploads + 1 WHERE id = " . $db->quote($GRANT['id']);
-    $db->exec($sql);
+  
+  $TICKET = DBConnection::getInstance()->getTicketById($$upload['id']);
+  if(!empty($GRANT['pass'])) {
+      $TICKET['pass'] = $GRANT['pass'];
   }
-
-  try { $db->commit(); }
-  catch(PDOException $e)
-  {
-    logDBError($db, "cannot commit new ticket to database");
-    return false;
-  }
-
-  // fetch defaults
-  $sql = "SELECT * FROM ticket WHERE id = " . $db->quote($upload['id']);
-  $TICKET = $db->query($sql)->fetch();
-  if(!empty($GRANT['pass'])) $TICKET['pass'] = $GRANT['pass'];
-
-  // trigger use hooks
-  onGrantUse($GRANT, $TICKET);
-
+  
+  Hooks::getInstance()->callHook('onGrantUse',['grant' => $GRANT, 'ticket' => $TICKET]);
   return array($GRANT, $TICKET);
 }
 
